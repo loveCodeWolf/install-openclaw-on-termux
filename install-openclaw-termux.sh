@@ -72,14 +72,16 @@ check_deps() {
     MISSING_DEPS=()
 
     for dep in "${DEPS[@]}"; do
-        if ! command -v $dep &> /dev/null; then
+        cmd=$dep
+        if [ "$dep" = "nodejs" ]; then cmd="node"; fi
+        if ! command -v $cmd &> /dev/null; then
             MISSING_DEPS+=($dep)
         fi
     done
 
     log "Node.js 版本: $(node --version 2>/dev/null || echo '未知')"
-    node -v
-    npm -v 
+    echo -e "${BLUE}Node.js 版本: $(node -v)${NC}"
+    echo -e "${BLUE}NPM 版本: $(npm -v)${NC}" 
 
     # 检查 Node.js 版本（必须 22 以上）
     NODE_VERSION=$(node --version 2>/dev/null | sed 's/v//' | cut -d. -f1)
@@ -102,7 +104,7 @@ check_deps() {
 
     if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
         log "缺失依赖: ${MISSING_DEPS[*]}"
-        echo -e "${YELLOW}补充安装缺失组件: ${MISSING_DEPS[*]}...${NC}"
+        echo -e "${YELLOW}检查可能的组件缺失: ${MISSING_DEPS[*]}${NC}"
         run_cmd pkg upgrade -y
         if [ $? -ne 0 ]; then
             log "pkg upgrade 失败"
@@ -138,15 +140,20 @@ configure_npm() {
     grep -qxF "export PATH=$NPM_BIN:$PATH" "$BASHRC" || echo "export PATH=$NPM_BIN:$PATH" >> "$BASHRC"
     export PATH="$NPM_BIN:$PATH"
 
-    log "开始安装 Openclaw"
-    # 安装 Openclaw (静默安装)
-    run_cmd npm i -g openclaw
-    if [ $? -ne 0 ]; then
-        log "Openclaw 安装失败"
-        echo -e "${RED}错误：Openclaw 安装失败${NC}"
-        exit 1
+    if [ -f "$NPM_BIN/openclaw" ]; then
+        log "Openclaw 已安装，跳过安装"
+        echo -e "${GREEN}✅ Openclaw 已安装，跳过安装${NC}"
+    else
+        log "开始安装 Openclaw"
+        # 安装 Openclaw (静默安装)
+        run_cmd npm i -g openclaw
+        if [ $? -ne 0 ]; then
+            log "Openclaw 安装失败"
+            echo -e "${RED}错误：Openclaw 安装失败${NC}"
+            exit 1
+        fi
+        log "Openclaw 安装完成"
     fi
-    log "Openclaw 安装完成"
 
     BASE_DIR="$NPM_GLOBAL/lib/node_modules/openclaw"
     mkdir -p "$LOG_DIR" "$HOME/tmp"
@@ -220,7 +227,7 @@ export TMPDIR=\$HOME/tmp
 export PATH=\$NPM_BIN:\$PATH
 sshd 2>/dev/null
 termux-wake-lock 2>/dev/null
-alias ocr="pkill -9 node 2>/dev/null; tmux kill-session -t openclaw 2>/dev/null; sleep 1; tmux new -d -s openclaw \"export PATH=$NPM_BIN:$PATH; openclaw gateway --bind lan --port $PORT --allow-unconfigured --token $TOKEN || read\""
+alias ocr="pkill -9 node 2>/dev/null; tmux kill-session -t openclaw 2>/dev/null; sleep 1; tmux new -d -s openclaw; sleep 1; tmux send-keys -t openclaw \"export PATH=$NPM_BIN:$PATH TMPDIR=$HOME/tmp; openclaw gateway --bind lan --port $PORT --allow-unconfigured --token $TOKEN\" C-m"
 alias oclog='tmux attach -t openclaw'
 alias ockill='pkill -9 node 2>/dev/null; tmux kill-session -t openclaw 2>/dev/null'
 # --- OpenClaw End ---
@@ -252,25 +259,37 @@ activate_wakelock() {
 }
 
 start_service() {
-    # Start the Openclaw service
     log "启动服务"
     echo -e "${YELLOW}[5/6] 启动服务...${NC}"
-    run_cmd pkill -9 node
-    run_cmd tmux kill-session -t openclaw
+
+    # 1. 防止 pkill 报错导致脚本退出
+    pkill -9 node 2>/dev/null || true
+    tmux kill-session -t openclaw 2>/dev/null || true
     sleep 1
-    run_cmd tmux new -d -s openclaw "export PATH=$NPM_BIN:$PATH; openclaw gateway --bind lan --port $PORT --allow-unconfigured --token $TOKEN || read"
-    sleep 3
-    log "服务启动完成"
 
-    echo -e "${GREEN}[6/6] 部署完成！运行 'oclog' 查看日志${NC}"
+    # 2. 确保目录存在
+    mkdir -p "$HOME/tmp"
+    export TMPDIR="$HOME/tmp"
 
-    # 验证服务是否运行
-    if command -v pgrep >/dev/null 2>&1 && pgrep -f "openclaw gateway" > /dev/null 2>&1; then
-        log "服务验证成功：Openclaw 正在运行"
-        echo -e "${GREEN}✅ 服务验证成功：Openclaw 正在运行${NC}"
+    # 3. 创建会话并捕获可能的错误
+    # 这里我们先启动一个 shell，再在 shell 里执行命令，方便观察
+    tmux new -d -s openclaw
+    sleep 1
+    
+    # 将输出重定向到一个临时文件，如果 tmux 崩了也能看到报错
+    tmux send-keys -t openclaw "export PATH=$NPM_BIN:$PATH TMPDIR=$HOME/tmp; openclaw gateway --bind lan --port $PORT --allow-unconfigured --token $TOKEN 2>&1 | tee $LOG_DIR/runtime.log" C-m
+    
+    log "服务指令已发送"
+    echo -e "${GREEN}[6/6] 部署指令发送完毕${NC}"
+    
+    # 4. 实时验证
+    sleep 2
+    if tmux has-session -t openclaw 2>/dev/null; then
+        echo -e "${GREEN}✅ tmux 会话已建立！${NC}"
+        echo -e "请执行: ${CYAN}oclog${NC} 查看日志"
     else
-        log "服务验证失败：Openclaw 未检测到运行"
-        echo -e "${YELLOW}⚠️  服务验证失败：Openclaw 未检测到运行，请检查日志${NC}"
+        echo -e "${RED}❌ 错误：tmux 会话启动后立即崩溃。${NC}"
+        echo -e "请检查报错日志: ${YELLOW}cat $LOG_DIR/runtime.log${NC}"
     fi
 }
 
@@ -400,5 +419,6 @@ apply_patches
 setup_autostart
 activate_wakelock
 start_service
+echo -e "${GREEN}脚本执行完成！${NC}，执行 oclog 查看日志"
 log "脚本执行完成"
 
