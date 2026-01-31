@@ -421,7 +421,8 @@ PORT=${PORT:-18789}
 read -p "请输入自定义 Token (用于安全访问，建议强密码) [留空随机生成]: " TOKEN
 if [ -z "$TOKEN" ]; then
     # 生成随机 Token
-    TOKEN="token$(date +%s | tail -c 8)"
+    TIMESTAMP=$(date +%s)
+    TOKEN="token${TIMESTAMP: -6}"
     echo -e "${GREEN}生成的随机 Token: $TOKEN${NC}"
 fi
 
