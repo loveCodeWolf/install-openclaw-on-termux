@@ -273,7 +273,6 @@ start_service() {
         echo -e "${YELLOW}⚠️  服务验证失败：Openclaw 未检测到运行，请检查日志${NC}"
     fi
 }
-}
 
 uninstall_openclaw() {
     # Uninstall Openclaw and clean up configurations
