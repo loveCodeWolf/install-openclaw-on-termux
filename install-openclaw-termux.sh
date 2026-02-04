@@ -345,7 +345,7 @@ export OPENCLAW_GATEWAY_TOKEN=$TOKEN
 export PATH=\$NPM_BIN:\$PATH
 sshd 2>/dev/null
 termux-wake-lock 2>/dev/null
-alias ocr="pkill -9 -f 'openclaw' 2>/dev/null; tmux kill-session -t openclaw 2>/dev/null; sleep 1; tmux new -d -s openclaw; sleep 1; tmux send-keys -t openclaw \"export PATH=$NPM_BIN:\$PATH TMPDIR=\$HOME/tmp; export OPENCLAW_GATEWAY_TOKEN=$TOKEN; [ -n \"\$OPENCLAW_PORT\" ] && PORT=\"\$OPENCLAW_PORT\" || PORT=$PORT; openclaw gateway --bind lan --port \\\$PORT --token \\\$OPENCLAW_GATEWAY_TOKEN --allow-unconfigured\" C-m"
+alias ocr="pkill -9 -f 'openclaw' 2>/dev/null; tmux kill-session -t openclaw 2>/dev/null; sleep 1; tmux new -d -s openclaw; sleep 1; tmux send-keys -t openclaw \"export PATH=$NPM_BIN:\$PATH TMPDIR=\$HOME/tmp; export OPENCLAW_GATEWAY_TOKEN=$TOKEN; openclaw gateway --bind lan --port $PORT --token \\\$OPENCLAW_GATEWAY_TOKEN --allow-unconfigured\" C-m"
 alias oclog='tmux attach -t openclaw'
 alias ockill='pkill -9 -f "openclaw" 2>/dev/null; tmux kill-session -t openclaw 2>/dev/null'
 # --- OpenClaw End ---
@@ -415,12 +415,7 @@ start_service() {
     sleep 1
     
     # 将输出重定向到一个临时文件，如果 tmux 崩了也能看到报错
-    # 验证 PORT 不为空
-    if [ -z "$PORT" ]; then
-        log "PORT 为空，使用默认值"
-        PORT=18789
-    fi
-    tmux send-keys -t openclaw "export PATH=$NPM_BIN:\$PATH TMPDIR=$HOME/tmp; export OPENCLAW_GATEWAY_TOKEN=$TOKEN; export OPENCLAW_PORT=$PORT; openclaw gateway --bind lan --port \\\$OPENCLAW_PORT --token \\\$OPENCLAW_GATEWAY_TOKEN --allow-unconfigured 2>&1 | tee $LOG_DIR/runtime.log" C-m
+    tmux send-keys -t openclaw "export PATH=$NPM_BIN:\$PATH TMPDIR=$HOME/tmp; export OPENCLAW_GATEWAY_TOKEN=$TOKEN; openclaw gateway --bind lan --port $PORT --token \\\$OPENCLAW_GATEWAY_TOKEN --allow-unconfigured 2>&1 | tee $LOG_DIR/runtime.log" C-m
     
     log "服务指令已发送"
     echo -e "${GREEN}[6/6] 部署指令发送完毕${NC}"
