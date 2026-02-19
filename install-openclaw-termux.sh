@@ -252,7 +252,7 @@ configure_npm() {
         echo -e "${YELLOW}正在安装 Openclaw...${NC}"
         # 安装 Openclaw (静默安装)
         # 设置环境变量跳过 node-llama-cpp 下载/编译（Termux 环境不支持）
-        run_cmd env NODE_LLAMA_CPP_SKIP_DOWNLOAD=true npm i -g openclaw
+        run_cmd env NODE_LLAMA_CPP_SKIP_DOWNLOAD=true npm i -g openclaw@2026.2.14
         if [ $? -ne 0 ]; then
             log "Openclaw 安装失败"
             echo -e "${RED}错误：Openclaw 安装失败${NC}"
